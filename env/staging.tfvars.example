@@ -1,0 +1,7 @@
+environment  = "staging"
+region       = "us-east-1"
+pg_db_name   = ""
+pg_username  = ""
+pg_password  = ""
+pg_port      = 5432
+bastion_cidr = "10.0.1.0/24"

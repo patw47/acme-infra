@@ -1,0 +1,140 @@
+{
+  "_meta": {
+    "description": "Oracle for acme-infra security scanner validation",
+    "generated": "2026-06-21",
+    "inspired_by": "TerraGoat (https://github.com/bridgecrewio/terragoat)",
+    "note": "Resource addresses use default Terraform workspace naming"
+  },
+
+  "expected_findings": [
+    {
+      "file": "s3.tf",
+      "resource": "aws_s3_bucket_acl.acme_public_bucket_acl",
+      "rule": "S3_BUCKET_PUBLIC_ACL",
+      "severity": "HIGH",
+      "description": "S3 bucket ACL set to public-read, granting read access to anonymous users",
+      "indicative_checkov_ref": "CKV_AWS_20"
+    },
+    {
+      "file": "s3.tf",
+      "resource": "aws_s3_bucket.acme_unencrypted_bucket",
+      "rule": "S3_BUCKET_NO_ENCRYPTION",
+      "severity": "HIGH",
+      "description": "No aws_s3_bucket_server_side_encryption_configuration exists for this bucket",
+      "indicative_checkov_ref": "CKV_AWS_145"
+    },
+    {
+      "file": "network.tf",
+      "resource": "aws_security_group.acme_open_ssh_sg",
+      "rule": "SG_SSH_OPEN_TO_WORLD",
+      "severity": "CRITICAL",
+      "description": "Security group permits inbound SSH (port 22) from 0.0.0.0/0",
+      "indicative_checkov_ref": "CKV_AWS_24"
+    },
+    {
+      "file": "network.tf",
+      "resource": "aws_security_group.acme_open_rdp_sg",
+      "rule": "SG_RDP_OPEN_TO_WORLD",
+      "severity": "CRITICAL",
+      "description": "Security group permits inbound RDP (port 3389) from 0.0.0.0/0",
+      "indicative_checkov_ref": "CKV_AWS_25"
+    },
+    {
+      "file": "rds.tf",
+      "resource": "aws_db_instance.acme_public_rds",
+      "rule": "RDS_PUBLICLY_ACCESSIBLE",
+      "severity": "HIGH",
+      "description": "RDS instance has publicly_accessible = true",
+      "indicative_checkov_ref": "CKV_AWS_17"
+    },
+    {
+      "file": "rds.tf",
+      "resource": "aws_db_instance.acme_unencrypted_rds",
+      "rule": "RDS_STORAGE_NOT_ENCRYPTED",
+      "severity": "HIGH",
+      "description": "RDS instance has storage_encrypted = false",
+      "indicative_checkov_ref": "CKV_AWS_16"
+    },
+    {
+      "file": "iam.tf",
+      "resource": "aws_iam_policy.acme_wildcard_policy",
+      "rule": "IAM_WILDCARD_ACTION_RESOURCE",
+      "severity": "CRITICAL",
+      "description": "IAM policy grants Action='*' on Resource='*', equivalent to full admin access",
+      "indicative_checkov_ref": "CKV_AWS_40"
+    },
+    {
+      "file": "compute.tf",
+      "resource": "aws_instance.acme_insecure_ec2",
+      "rule": "EC2_HARDCODED_CREDENTIALS_IN_USERDATA",
+      "severity": "CRITICAL",
+      "description": "EC2 user_data contains hardcoded AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY patterns",
+      "indicative_checkov_ref": "CKV_AWS_46"
+    }
+  ],
+
+  "must_not_flag": [
+    {
+      "file": "s3.tf",
+      "resource": "aws_s3_bucket.acme_private_bucket",
+      "reason": "Bucket is private; encryption and public-access-block are configured via sibling resources",
+      "trap_category": "CLEAN_BASELINE"
+    },
+    {
+      "file": "network.tf",
+      "resource": "aws_security_group.acme_web_sg",
+      "reason": "Ports 80 and 443 open to 0.0.0.0/0 is legitimate for a public-facing load balancer",
+      "trap_category": "CLEAN_BASELINE"
+    },
+    {
+      "file": "network.tf",
+      "resource": "aws_security_group.acme_internal_ssh_sg",
+      "reason": "SSH restricted to 10.0.0.0/8 (RFC-1918); not exposed to internet",
+      "trap_category": "CLEAN_BASELINE"
+    },
+    {
+      "file": "rds.tf",
+      "resource": "aws_db_instance.acme_secure_rds",
+      "reason": "storage_encrypted=true and publicly_accessible=false — fully compliant baseline",
+      "trap_category": "CLEAN_BASELINE"
+    },
+    {
+      "file": "iam.tf",
+      "resource": "aws_iam_policy.acme_scoped_s3_policy",
+      "reason": "Actions limited to s3:GetObject and s3:ListBucket on a specific bucket ARN and prefix",
+      "trap_category": "CLEAN_BASELINE"
+    },
+    {
+      "file": "s3.tf",
+      "resource": "aws_s3_bucket.acme_trap_separate_enc",
+      "reason": "TRAP: bucket block has no inline encryption but aws_s3_bucket_server_side_encryption_configuration.acme_trap_enc and aws_s3_bucket_public_access_block.acme_trap_pab cover it; scanner must resolve sibling resources",
+      "trap_category": "FALSE_POSITIVE_TRAP"
+    },
+    {
+      "file": "network.tf",
+      "resource": "aws_security_group.acme_var_ssh_sg",
+      "reason": "TRAP: SSH cidr_blocks = [var.bastion_cidr]; static scanners cannot resolve the variable value — flagging HIGH on an unresolvable reference is a false positive",
+      "trap_category": "FALSE_POSITIVE_TRAP"
+    },
+    {
+      "file": "s3.tf",
+      "resource": "aws_s3_bucket_policy.acme_vpce_policy",
+      "reason": "TRAP: Principal='*' is constrained by aws:SourceVpce condition, making it a VPC-endpoint-scoped grant, not a public access grant",
+      "trap_category": "FALSE_POSITIVE_TRAP"
+    },
+    {
+      "file": "s3.tf",
+      "resource": "aws_s3_bucket.acme_unencrypted_bucket",
+      "reason": "TRAP: commented-out line '# acl = \"public-read\"' must not be flagged; only active HCL is in scope",
+      "trap_category": "FALSE_POSITIVE_TRAP"
+    }
+  ],
+
+  "expected_warnings": [
+    {
+      "file": "network.tf",
+      "resource": "aws_security_group.acme_var_ssh_sg",
+      "reason": "SSH ingress CIDR is var.bastion_cidr — value unresolvable without tfvars; emit WARNING (not HIGH) to indicate manual review required"
+    }
+  ]
+}
